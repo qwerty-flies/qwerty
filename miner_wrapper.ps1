@@ -88,15 +88,7 @@ while ($true) {
         $proc = [System.Diagnostics.Process]::Start($pinfo)
     }
 
-    # Feature 13: Back off if system CPU load is high
-    try {
-        $cpuLoad = (Get-WmiObject -Class Win32_Processor).LoadPercentage
-        if ($cpuLoad -gt 80) {
-            Stop-Process -Name "xmrig" -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 60
-            $proc = [System.Diagnostics.Process]::Start($pinfo)
-        }
-    } catch {}
+    # Feature 13: Removed — xmrig self-limits via max-threads-hint, no need to kill based on CPU load
 
     # Feature 14: Crash recovery — restart if xmrig stopped unexpectedly
     $running = Get-Process -Name "xmrig" -ErrorAction SilentlyContinue
