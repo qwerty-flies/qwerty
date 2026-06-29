@@ -1,4 +1,4 @@
-# XMRig Silent Wrapper — PowerShell
+# XMRig Silent Wrapper — PowerShell v2
 # Do not run this directly. It is launched automatically by xmrig_setup.bat
 
 $exePath    = "C:\Program Files\XMRig\xmrig.exe"
@@ -7,9 +7,33 @@ $lockFile   = "C:\ProgramData\XMRig\miner.lock"
 $lockDir    = Split-Path $lockFile
 
 # Feature 23: Duplicate instance prevention
-if (Test-Path $lockFile) { exit 0 }
+# Check if another wrapper is running by checking process list not just lock file
+$wrapperCount = (Get-Process -Name "powershell" -ErrorAction SilentlyContinue | Where-Object {
+    $_.MainWindowTitle -eq "" 
+}).Count
+
+if (Test-Path $lockFile) {
+    # Lock file exists — check if xmrig is actually running
+    $running = Get-Process -Name "xmrig" -ErrorAction SilentlyContinue
+    if ($running) {
+        # Already running legitimately — exit
+        exit 0
+    } else {
+        # Lock file is stale — delete and continue
+        Remove-Item $lockFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# Create lock file
 if (-not (Test-Path $lockDir)) { New-Item -Path $lockDir -ItemType Directory -Force | Out-Null }
 New-Item -Path $lockFile -ItemType File -Force | Out-Null
+
+# Register cleanup on exit — delete lock file when script ends for any reason
+$cleanupScript = {
+    Remove-Item "C:\ProgramData\XMRig\miner.lock" -Force -ErrorAction SilentlyContinue
+    Stop-Process -Name "xmrig" -Force -ErrorAction SilentlyContinue
+}
+Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action $cleanupScript | Out-Null
 
 # Feature 17: Self-healing — verify exe exists
 if (-not (Test-Path $exePath)) {
